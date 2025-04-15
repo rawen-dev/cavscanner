@@ -13,6 +13,7 @@ class _ScanPageState extends State<ScanPage> {
   final List<String> scannedItems = [];
   final MobileScannerController controller = MobileScannerController(
     formats: [BarcodeFormat.all],
+    torchEnabled: true
   );
 
   @override
