@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Skenování Člověk a Víra výstav.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -27,12 +27,50 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="ČaV Skener" />
+  <link rel="manifest" href="site.webmanifest" />
+  <meta name="theme-color" content="#ffffff">
 
-  <title>cavscanner</title>
-  <link rel="manifest" href="manifest.json">
+  <title>ČaV Skener</title>
 </head>
 <body>
+<script>
+
+  let deferredPrompt;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    deferredPrompt = e;
+    e.preventDefault();
+    return false;
+  });
+
+  function promptInstall(){
+     deferredPrompt.prompt();
+  }
+
+  // Listen for app install event
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    appInstalled();
+  });
+
+  // Track how PWA was launched (either from browser or as PWA)
+  function getLaunchMode() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if(deferredPrompt) hasPrompt();
+    if (document.referrer.startsWith('android-app://')) {
+      appLaunchedAsTWA();
+    } else if (navigator.standalone || isStandalone) {
+      appLaunchedAsPWA();
+    } else {
+      window.appLaunchedInBrowser();
+    }
+  }
+</script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
