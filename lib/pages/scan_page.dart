@@ -51,7 +51,7 @@ class _ScanPageState extends State<ScanPage> {
 
   // Disable system back navigation to force the user to save scans.
   Future<bool> _onWillPop() async {
-    // You could also show a dialog to inform the user that the scans will be lost.
+    // Optionally show a dialog warning that scans will be lost.
     return false;
   }
 
@@ -63,10 +63,26 @@ class _ScanPageState extends State<ScanPage> {
         appBar: AppBar(
           title: const Text("Režim skenování"),
           automaticallyImplyLeading: false,
+          actions: [
+            // Torch toggle button.
+            ValueListenableBuilder<MobileScannerState>(
+              valueListenable: controller,
+              builder: (context, state, child) {
+                return IconButton(
+                  icon: Icon(
+                    state.torchState == TorchState.on
+                        ? Icons.flash_on
+                        : Icons.flash_off,
+                  ),
+                  onPressed: () => controller.toggleTorch(),
+                );
+              },
+            ),
+          ],
         ),
         body: Column(
           children: [
-            // Scanning view area
+            // Scanning view area.
             Expanded(
               flex: 2,
               child: MobileScanner(
@@ -74,7 +90,7 @@ class _ScanPageState extends State<ScanPage> {
                 onDetect: _onDetect,
               ),
             ),
-            // List of scanned items
+            // List of scanned items.
             Expanded(
               flex: 1,
               child: Column(
@@ -107,7 +123,7 @@ class _ScanPageState extends State<ScanPage> {
             ),
           ],
         ),
-        // Always-visible, large "End and Save" button at bottom
+        // Always-visible, large "End and Save" button at bottom.
         bottomNavigationBar: Container(
           padding: const EdgeInsets.all(16),
           child: ElevatedButton.icon(
