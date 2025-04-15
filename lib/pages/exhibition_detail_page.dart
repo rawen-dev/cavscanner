@@ -75,16 +75,18 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
   }
 
   Future<void> _confirmDeleteExhibition() async {
-    bool confirmed = await _confirmDeletion("Opravdu chcete smazat celou výstavu '${exhibition.title}'?");
+    bool confirmed = await _confirmDeletion(
+        "Opravdu chcete smazat celou výstavu '${exhibition.title}'?");
     if (confirmed) {
-      Navigator.pop(context, null); // Return null to signal deletion of the exhibition
+      // Signal deletion by returning null to the calling page.
+      Navigator.pop(context, null);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      // When back button is pressed, return the updated exhibition.
+      // When the back button is pressed, return the updated exhibition.
       // If the exhibition was deleted, null is returned.
       onWillPop: () async {
         Navigator.pop(context, exhibition);

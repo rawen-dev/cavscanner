@@ -102,7 +102,13 @@ class _ExhibitionListPageState extends State<ExhibitionListPage> {
             ),
         ],
       ),
-      body: ListView.builder(
+      body: exhibitions.isEmpty
+          ? Center(
+        child: Text(
+          "Žádná výstava. Přidejte výstavu kliknutím na tlačítko '+'",
+        ),
+      )
+          : ListView.builder(
         itemCount: exhibitions.length,
         itemBuilder: (context, index) {
           final exhibition = exhibitions[index];
@@ -112,17 +118,25 @@ class _ExhibitionListPageState extends State<ExhibitionListPage> {
               "Fotografií: ${exhibition.pictures.length} – Poslední sken: ${_formatDate(exhibition.lastScan, context)}",
             ),
             onTap: () async {
-              final updatedExhibition = await Navigator.push<Exhibition>(
+              // Navigate to detail page and wait for the result.
+              final updatedExhibition = await Navigator.push<Exhibition?>(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ExhibitionDetailPage(exhibition: exhibition),
+                  builder: (context) =>
+                      ExhibitionDetailPage(exhibition: exhibition),
                 ),
               );
-              if (updatedExhibition != null) {
+              // If null is returned, the exhibition was deleted.
+              if (updatedExhibition == null) {
+                setState(() {
+                  exhibitions.removeAt(index);
+                });
+                await _saveExhibitions();
+              } else {
                 setState(() {
                   exhibitions[index] = updatedExhibition;
                 });
-                _saveExhibitions();
+                await _saveExhibitions();
               }
             },
           );
