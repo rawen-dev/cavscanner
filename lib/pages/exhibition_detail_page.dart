@@ -1,7 +1,9 @@
+// lib/pages/exhibition_detail_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/exhibition.dart';
 import 'scan_page.dart';
+import '../models/exhibition.dart';
 
 class ExhibitionDetailPage extends StatefulWidget {
   final Exhibition exhibition;
@@ -22,7 +24,7 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
   }
 
   void _copyTitles() {
-    final titles = exhibition.pictures.join('\n');
+    final titles = exhibition.pictures.join(',');
     Clipboard.setData(ClipboardData(text: titles));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Tituly byly zkopírovány")),
@@ -30,15 +32,16 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
   }
 
   Future<void> _startScanning() async {
+    // Pass the existing picture codes into the ScanPage
     final scannedItems = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute(
-        builder: (context) => const ScanPage(),
+        builder: (context) => ScanPage(initialItems: exhibition.pictures),
       ),
     );
     if (scannedItems != null && scannedItems.isNotEmpty) {
       setState(() {
-        exhibition.pictures.addAll(scannedItems);
+        exhibition.pictures = scannedItems;
         exhibition.lastScan = DateTime.now();
       });
     }
@@ -78,19 +81,18 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
     bool confirmed = await _confirmDeletion(
         "Opravdu chcete smazat celou výstavu '${exhibition.title}'?");
     if (confirmed) {
-      // Signal deletion by returning null to the calling page.
       Navigator.pop(context, null);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      // When the back button is pressed, return the updated exhibition.
-      // If the exhibition was deleted, null is returned.
-      onWillPop: () async {
-        Navigator.pop(context, exhibition);
-        return false;
+    return PopScope<Exhibition?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pop(context, exhibition);
+        }
       },
       child: Scaffold(
         appBar: AppBar(

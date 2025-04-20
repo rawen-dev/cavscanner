@@ -1,25 +1,59 @@
+// lib/pages/scan_page.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScanPage extends StatefulWidget {
-  const ScanPage({super.key});
+  /// Initial list of already‑scanned picture codes
+  final List<String> initialItems;
+
+  const ScanPage({Key? key, this.initialItems = const []}) : super(key: key);
 
   @override
   _ScanPageState createState() => _ScanPageState();
 }
 
 class _ScanPageState extends State<ScanPage> {
-  final List<String> scannedItems = [];
+  late List<String> scannedItems;
+
+  /// When we last showed a “duplicate” banner for each code
+  final Map<String, DateTime> _lastDuplicateBannerTime = {};
+
+  /// Track which invalid codes we’ve already notified
+  final Set<String> _invalidNotified = {};
+
   final MobileScannerController controller = MobileScannerController(
     formats: [BarcodeFormat.all],
-    torchEnabled: true
+    torchEnabled: true,
   );
 
-  @override
-  void didChangeDependencies() async {
-    super.didChangeDependencies();
+  // Your existing regex
+  final RegExp codeRegex = RegExp(r'^(?:20\d{2}|201x)/\d{3}$');
 
+  bool _isLoading = false;
+
+  /// Controller to scroll the list of scanned items
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    scannedItems = List.from(widget.initialItems);
+
+    // Scroll to bottom once the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && scannedItems.isNotEmpty) {
+        _scrollController.jumpTo(
+          _scrollController.position.maxScrollExtent,
+        );
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     if (kIsWeb) {
       MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
         "https://unpkg.com/@zxing/library@0.21.3",
@@ -30,112 +64,190 @@ class _ScanPageState extends State<ScanPage> {
   @override
   void dispose() {
     controller.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Shows a MaterialBanner at the top, auto‑dismissed after 5 seconds.
+  void _showBanner(String message, Color backgroundColor) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: backgroundColor,
+        actions: [
+          TextButton(
+            onPressed: () => messenger.hideCurrentMaterialBanner(),
+            child: const Text(
+              'Zavřít',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) messenger.hideCurrentMaterialBanner();
+    });
+  }
+
+  /// Animate the list to the bottom
+  void _scrollToEnd() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   void _onDetect(BarcodeCapture capture) {
     final barcodes = capture.barcodes;
-    if (barcodes.isNotEmpty) {
-      final code = barcodes.first.rawValue;
-      if (code != null && !scannedItems.contains(code)) {
-        setState(() {
-          scannedItems.add(code);
-        });
+    if (barcodes.isEmpty) return;
+
+    final code = barcodes.first.rawValue;
+    if (code == null) return;
+
+    setState(() => _isLoading = true);
+
+    final isValid = codeRegex.hasMatch(code);
+    final alreadyScanned = scannedItems.contains(code);
+
+    if (isValid) {
+      if (!alreadyScanned) {
+        // New valid code
+        setState(() => scannedItems.add(code));
+
+        // Prevent immediate duplicate banner for this code
+        _lastDuplicateBannerTime[code] = DateTime.now();
+
+        _showBanner('Kód přidán: "$code"', Colors.green);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
+      } else {
+        // Duplicate—but only if >5s since last banner for this code
+        final now = DateTime.now();
+        final lastTime = _lastDuplicateBannerTime[code];
+        if (lastTime == null || now.difference(lastTime) >= const Duration(seconds: 5)) {
+          _lastDuplicateBannerTime[code] = now;
+          _showBanner('Kód již existuje: "$code"', Colors.orange);
+        }
+      }
+    } else {
+      // Invalid code—only once per distinct code
+      if (!_invalidNotified.contains(code)) {
+        _invalidNotified.add(code);
+        _showBanner('Neplatný kód: "$code"', Colors.redAccent);
       }
     }
+
+    setState(() => _isLoading = false);
   }
 
-  // The user must end and save the scanning explicitly.
   void _endAndSave() {
     Navigator.pop(context, scannedItems);
   }
 
-  // Disable system back navigation to force the user to save scans.
-  Future<bool> _onWillPop() async {
-    // Optionally show a dialog warning that scans will be lost.
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope<List<String>>(
+      canPop: false,
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Režim skenování"),
           automaticallyImplyLeading: false,
           actions: [
-            // Torch toggle button.
             ValueListenableBuilder<MobileScannerState>(
               valueListenable: controller,
-              builder: (context, state, child) {
-                return IconButton(
-                  icon: Icon(
-                    state.torchState == TorchState.on
-                        ? Icons.flash_on
-                        : Icons.flash_off,
-                  ),
-                  onPressed: () => controller.toggleTorch(),
-                );
-              },
+              builder: (context, state, child) => IconButton(
+                icon: Icon(
+                  state.torchState == TorchState.on
+                      ? Icons.flash_on
+                      : Icons.flash_off,
+                ),
+                onPressed: () => controller.toggleTorch(),
+              ),
             ),
           ],
         ),
-        body: Column(
+        body: Stack(
           children: [
-            // Scanning view area.
-            Expanded(
-              flex: 2,
-              child: MobileScanner(
-                controller: controller,
-                onDetect: _onDetect,
-              ),
-            ),
-            // List of scanned items.
-            Expanded(
-              flex: 1,
-              child: Column(
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text("Naskenované položky:"),
+            Column(
+              children: [
+                // Camera preview
+                Expanded(
+                  flex: 2,
+                  child: MobileScanner(
+                    controller: controller,
+                    onDetect: _onDetect,
                   ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: scannedItems.length,
-                      itemBuilder: (context, index) {
-                        final item = scannedItems[index];
-                        return ListTile(
-                          title: Text(item),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () {
-                              setState(() {
-                                scannedItems.removeAt(index);
-                              });
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                ),
+                // Scanned items list
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          "Naskenované položky:",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          itemCount: scannedItems.length,
+                          itemBuilder: (context, index) {
+                            final item = scannedItems[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: ListTile(
+                                leading: const Icon(Icons.image),
+                                title: Text(item),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  onPressed: () {
+                                    setState(() {
+                                      scannedItems.removeAt(index);
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+
+            // Loading overlay
+            if (_isLoading)
+              const Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black45,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
           ],
         ),
-        // Always-visible, large "End and Save" button at bottom.
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.all(16),
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(50),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+              ),
+              onPressed: _endAndSave,
+              icon: const Icon(Icons.check),
+              label: const Text("Ukončit a uložit"),
             ),
-            onPressed: _endAndSave,
-            icon: const Icon(Icons.check),
-            label: const Text("Ukončit a uložit"),
           ),
         ),
       ),
