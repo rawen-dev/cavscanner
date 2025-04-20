@@ -15,20 +15,24 @@ class ScanPage extends StatefulWidget {
 }
 
 class _ScanPageState extends State<ScanPage> {
+  /// The set of codes that came from the exhibition (cannot be removed)
+  late final Set<String> _initialSet;
+
+  /// All codes currently shown in the list (initial + newly scanned)
   late List<String> scannedItems;
 
   /// When we last showed a “duplicate” banner for each code
   final Map<String, DateTime> _lastDuplicateBannerTime = {};
 
-  /// Track which invalid codes we’ve already notified
-  final Set<String> _invalidNotified = {};
+  /// When we last showed an “invalid” banner for each code
+  final Map<String, DateTime> _lastInvalidBannerTime = {};
 
   final MobileScannerController controller = MobileScannerController(
     formats: [BarcodeFormat.all],
     torchEnabled: true,
   );
 
-  // Your existing regex
+  // Regex: either a four‑digit year 20xx or '201x', then '/', then three digits
   final RegExp codeRegex = RegExp(r'^(?:20\d{2}|201x)/\d{3}$');
 
   bool _isLoading = false;
@@ -39,14 +43,14 @@ class _ScanPageState extends State<ScanPage> {
   @override
   void initState() {
     super.initState();
+    // Remember which codes were “already there”
+    _initialSet = Set.from(widget.initialItems);
     scannedItems = List.from(widget.initialItems);
 
-    // Scroll to bottom once the first frame is rendered
+    // On first frame, scroll to bottom if there are any items
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && scannedItems.isNotEmpty) {
-        _scrollController.jumpTo(
-          _scrollController.position.maxScrollExtent,
-        );
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
   }
@@ -95,7 +99,7 @@ class _ScanPageState extends State<ScanPage> {
     });
   }
 
-  /// Animate the list to the bottom
+  /// Animate the list to the bottom after adding a new item
   void _scrollToEnd() {
     if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
@@ -114,32 +118,30 @@ class _ScanPageState extends State<ScanPage> {
 
     setState(() => _isLoading = true);
 
+    final now = DateTime.now();
     final isValid = codeRegex.hasMatch(code);
     final alreadyScanned = scannedItems.contains(code);
 
     if (isValid) {
       if (!alreadyScanned) {
-        // New valid code
+        // New valid code: add, prevent immediate duplicate alert, show banner, scroll
         setState(() => scannedItems.add(code));
-
-        // Prevent immediate duplicate banner for this code
-        _lastDuplicateBannerTime[code] = DateTime.now();
-
+        _lastDuplicateBannerTime[code] = now;
         _showBanner('Kód přidán: "$code"', Colors.green);
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
       } else {
-        // Duplicate—but only if >5s since last banner for this code
-        final now = DateTime.now();
-        final lastTime = _lastDuplicateBannerTime[code];
-        if (lastTime == null || now.difference(lastTime) >= const Duration(seconds: 5)) {
+        // Duplicate: only if >5s since last duplicate banner for this code
+        final lastDup = _lastDuplicateBannerTime[code];
+        if (lastDup == null || now.difference(lastDup) >= const Duration(seconds: 5)) {
           _lastDuplicateBannerTime[code] = now;
           _showBanner('Kód již existuje: "$code"', Colors.orange);
         }
       }
     } else {
-      // Invalid code—only once per distinct code
-      if (!_invalidNotified.contains(code)) {
-        _invalidNotified.add(code);
+      // Invalid code: only if >5s since last invalid banner for this code
+      final lastInv = _lastInvalidBannerTime[code];
+      if (lastInv == null || now.difference(lastInv) >= const Duration(seconds: 5)) {
+        _lastInvalidBannerTime[code] = now;
         _showBanner('Neplatný kód: "$code"', Colors.redAccent);
       }
     }
@@ -185,16 +187,19 @@ class _ScanPageState extends State<ScanPage> {
                     onDetect: _onDetect,
                   ),
                 ),
-                // Scanned items list
+                // Scanned items list (made a bit bigger with flex 2)
                 Expanded(
-                  flex: 1,
+                  flex: 2,
                   child: Column(
                     children: [
                       const Padding(
                         padding: EdgeInsets.all(8.0),
                         child: Text(
                           "Naskenované položky:",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                       Expanded(
@@ -203,12 +208,25 @@ class _ScanPageState extends State<ScanPage> {
                           itemCount: scannedItems.length,
                           itemBuilder: (context, index) {
                             final item = scannedItems[index];
+                            final isInitial = _initialSet.contains(item);
                             return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              color: isInitial
+                                  ? Colors.grey.shade100
+                                  : Colors.white,
                               child: ListTile(
-                                leading: const Icon(Icons.image),
+                                leading: Icon(
+                                  isInitial ? Icons.history : Icons.fiber_new,
+                                  color: isInitial
+                                      ? Colors.grey
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
                                 title: Text(item),
-                                trailing: IconButton(
+                                trailing: isInitial
+                                // no delete for initial items
+                                    ? const SizedBox(width: 48)
+                                    : IconButton(
                                   icon: const Icon(Icons.delete),
                                   onPressed: () {
                                     setState(() {
@@ -227,7 +245,7 @@ class _ScanPageState extends State<ScanPage> {
               ],
             ),
 
-            // Loading overlay
+            // Loading overlay during processing
             if (_isLoading)
               const Positioned.fill(
                 child: ColoredBox(
