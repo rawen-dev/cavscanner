@@ -24,7 +24,7 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
   }
 
   void _copyTitles() {
-    final titles = exhibition.pictures.join(',');
+    final titles = '${exhibition.pictures.join(',')},';
     Clipboard.setData(ClipboardData(text: titles));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Tituly byly zkopírovány")),
@@ -96,7 +96,7 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Výstava: ${exhibition.title}"),
+          title: Text(exhibition.title),
           actions: [
             IconButton(
               icon: const Icon(Icons.delete),
@@ -108,15 +108,38 @@ class _ExhibitionDetailPageState extends State<ExhibitionDetailPage> {
         body: Column(
           children: [
             Expanded(
-              child: ListView.builder(
+              child: exhibition.pictures.isEmpty
+                  ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.photo_library_outlined, size: 80, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text(
+                      "Žádné fotografie",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      "Stiskněte 'Skenovat' pro přidání fotek.",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              )
+                  : ListView.builder(
                 itemCount: exhibition.pictures.length,
                 itemBuilder: (context, index) {
                   final title = exhibition.pictures[index];
-                  return ListTile(
-                    title: Text(title),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () => _removePicture(index),
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: ListTile(
+                      leading: const Icon(Icons.image),
+                      title: Text(title),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => _removePicture(index),
+                      ),
                     ),
                   );
                 },

@@ -3,6 +3,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:vibration/vibration.dart';
+import 'package:assets_audio_player/assets_audio_player.dart';
+
+import '../helpers/storage_helper.dart';
 
 class ScanPage extends StatefulWidget {
   /// Initial list of already‑scanned picture codes
@@ -28,7 +32,8 @@ class _ScanPageState extends State<ScanPage> {
   final Map<String, DateTime> _lastInvalidBannerTime = {};
 
   final MobileScannerController controller = MobileScannerController(
-    formats: [BarcodeFormat.all],
+    formats: [BarcodeFormat.code128],
+    detectionSpeed: DetectionSpeed.normal,
     torchEnabled: true,
   );
 
@@ -40,12 +45,27 @@ class _ScanPageState extends State<ScanPage> {
   /// Controller to scroll the list of scanned items
   final ScrollController _scrollController = ScrollController();
 
+  final AssetsAudioPlayer _audioPlayer = AssetsAudioPlayer();
+
+  bool _soundEnabled = true;
+
+  static const _soundPrefKey = 'scan_sound_enabled';
+
   @override
   void initState() {
     super.initState();
     // Remember which codes were “already there”
     _initialSet = Set.from(widget.initialItems);
     scannedItems = List.from(widget.initialItems);
+
+    // Load sound setting from storage
+    StorageHelper.get(_soundPrefKey).then((value) {
+      if (value != null) {
+        setState(() {
+          _soundEnabled = value == 'true';
+        });
+      }
+    });
 
     // On first frame, scroll to bottom if there are any items
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,6 +89,7 @@ class _ScanPageState extends State<ScanPage> {
   void dispose() {
     controller.dispose();
     _scrollController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -109,7 +130,7 @@ class _ScanPageState extends State<ScanPage> {
     );
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  void _onDetect(BarcodeCapture capture) async {
     final barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
 
@@ -128,6 +149,19 @@ class _ScanPageState extends State<ScanPage> {
         setState(() => scannedItems.add(code));
         _lastDuplicateBannerTime[code] = now;
         _showBanner('Kód přidán: "$code"', Colors.green);
+
+        // Vibrace a zvuk
+        if (await Vibration.hasVibrator()) {
+          Vibration.vibrate(duration: 100);
+        }
+        if (_soundEnabled) {
+          _audioPlayer.open(
+            Audio("assets/success.wav"),
+            autoStart: true,
+            showNotification: false,
+          );
+        }
+
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
       } else {
         // Duplicate: only if >5s since last duplicate banner for this code
@@ -153,6 +187,13 @@ class _ScanPageState extends State<ScanPage> {
     Navigator.pop(context, scannedItems);
   }
 
+  void _toggleSound() {
+    setState(() {
+      _soundEnabled = !_soundEnabled;
+    });
+    StorageHelper.set(_soundPrefKey, _soundEnabled.toString());
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope<List<String>>(
@@ -162,6 +203,12 @@ class _ScanPageState extends State<ScanPage> {
           title: const Text("Režim skenování"),
           automaticallyImplyLeading: false,
           actions: [
+            IconButton(
+              icon: Icon(
+                _soundEnabled ? Icons.volume_up : Icons.volume_off,
+              ),
+              onPressed: _toggleSound,
+            ),
             ValueListenableBuilder<MobileScannerState>(
               valueListenable: controller,
               builder: (context, state, child) => IconButton(

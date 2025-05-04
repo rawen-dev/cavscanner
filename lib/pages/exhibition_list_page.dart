@@ -1,4 +1,7 @@
+// lib/pages/exhibition_list_page.dart
+
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -77,6 +80,26 @@ class _ExhibitionListPageState extends State<ExhibitionListPage> {
     );
   }
 
+  Future<void> _seedSampleExhibitions() async {
+    final now = DateTime.now();
+    final random = Random();
+    final sample = List.generate(5, (i) {
+      final count = random.nextInt(5) + 3;
+      final pictures = List.generate(count, (j) => "2024/${100 + j + i * 10}");
+      return Exhibition(
+        id: (now.millisecondsSinceEpoch + i).toString(),
+        title: "Výstava ${i + 1}",
+        pictures: pictures,
+        lastScan: now.subtract(Duration(days: i * 2)),
+      );
+    });
+
+    setState(() {
+      exhibitions = sample;
+    });
+    await _saveExhibitions();
+  }
+
   String _formatDate(DateTime? date, BuildContext context) {
     if (date == null) return "-";
     final locale = Localizations.localeOf(context).toString();
@@ -100,45 +123,66 @@ class _ExhibitionListPageState extends State<ExhibitionListPage> {
                 );
               },
             ),
+          // IconButton(
+          //   icon: const Icon(Icons.bolt),
+          //   tooltip: "Generovat ukázková data",
+          //   onPressed: _seedSampleExhibitions,
+          // ),
         ],
       ),
       body: exhibitions.isEmpty
           ? Center(
-        child: Text(
-          "Žádná výstava. Přidejte výstavu kliknutím na tlačítko '+'",
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.grid_view_sharp, size: 80, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              "Žádná výstava",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Klikněte na '+' pro vytvoření nové výstavy.",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
         ),
       )
           : ListView.builder(
         itemCount: exhibitions.length,
         itemBuilder: (context, index) {
           final exhibition = exhibitions[index];
-          return ListTile(
-            title: Text(exhibition.title),
-            subtitle: Text(
-              "Fotografií: ${exhibition.pictures.length} – Poslední sken: ${_formatDate(exhibition.lastScan, context)}",
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(Icons.grid_view_sharp),
+              title: Text(exhibition.title),
+              subtitle: Text(
+                "Fotografií: ${exhibition.pictures.length} – Poslední sken: ${_formatDate(exhibition.lastScan, context)}",
+              ),
+              onTap: () async {
+                final updatedExhibition = await Navigator.push<Exhibition?>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ExhibitionDetailPage(exhibition: exhibition),
+                  ),
+                );
+                if (updatedExhibition == null) {
+                  setState(() {
+                    exhibitions.removeAt(index);
+                  });
+                  await _saveExhibitions();
+                } else {
+                  setState(() {
+                    exhibitions[index] = updatedExhibition;
+                  });
+                  await _saveExhibitions();
+                }
+              },
             ),
-            onTap: () async {
-              // Navigate to detail page and wait for the result.
-              final updatedExhibition = await Navigator.push<Exhibition?>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      ExhibitionDetailPage(exhibition: exhibition),
-                ),
-              );
-              // If null is returned, the exhibition was deleted.
-              if (updatedExhibition == null) {
-                setState(() {
-                  exhibitions.removeAt(index);
-                });
-                await _saveExhibitions();
-              } else {
-                setState(() {
-                  exhibitions[index] = updatedExhibition;
-                });
-                await _saveExhibitions();
-              }
-            },
           );
         },
       ),
