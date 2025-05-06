@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.cavscanner"
+    namespace = "cavscanner.cavscanner"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973" // Adjusted per plugin requirements
 
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.cavscanner"
+        applicationId = "cavscanner.cavscanner"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -1,4 +1,4 @@
-package com.example.cavscanner
+package cavscanner.cavscanner
 
 import io.flutter.embedding.android.FlutterActivity
 
