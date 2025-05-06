@@ -4,12 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:vibration/vibration.dart';
-import 'package:assets_audio_player/assets_audio_player.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 
 import '../helpers/storage_helper.dart';
 
 class ScanPage extends StatefulWidget {
-  /// Initial list of already‑scanned picture codes
+  /// Initial list of already-scanned picture codes
   final List<String> initialItems;
 
   const ScanPage({Key? key, this.initialItems = const []}) : super(key: key);
@@ -37,7 +38,7 @@ class _ScanPageState extends State<ScanPage> {
     torchEnabled: true,
   );
 
-  // Regex: either a four‑digit year 20xx or '201x', then '/', then three digits
+  // Regex: either a four-digit year 20xx or '201x', then '/', then three digits
   final RegExp codeRegex = RegExp(r'^(?:20\d{2}|201x)/\d{3}$');
 
   bool _isLoading = false;
@@ -45,15 +46,16 @@ class _ScanPageState extends State<ScanPage> {
   /// Controller to scroll the list of scanned items
   final ScrollController _scrollController = ScrollController();
 
-  final AssetsAudioPlayer _audioPlayer = AssetsAudioPlayer();
+  /// Just Audio player
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   bool _soundEnabled = true;
-
   static const _soundPrefKey = 'scan_sound_enabled';
 
   @override
   void initState() {
     super.initState();
+
     // Remember which codes were “already there”
     _initialSet = Set.from(widget.initialItems);
     scannedItems = List.from(widget.initialItems);
@@ -67,12 +69,28 @@ class _ScanPageState extends State<ScanPage> {
       }
     });
 
+    // Preload the success sound
+    _initAudio();
+
     // On first frame, scroll to bottom if there are any items
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && scannedItems.isNotEmpty) {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
+  }
+
+  Future<void> _initAudio() async {
+    // Configure the audio session for speech/dialogue short sounds
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.speech());
+
+    try {
+      // Preload your asset (ensure it's in pubspec.yaml under flutter.assets)
+      await _audioPlayer.setAsset('assets/success.wav');
+    } catch (e) {
+      debugPrint('Error loading success sound: $e');
+    }
   }
 
   @override
@@ -93,7 +111,7 @@ class _ScanPageState extends State<ScanPage> {
     super.dispose();
   }
 
-  /// Shows a MaterialBanner at the top, auto‑dismissed after 5 seconds.
+  /// Shows a MaterialBanner at the top, auto-dismissed after 5 seconds.
   void _showBanner(String message, Color backgroundColor) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentMaterialBanner();
@@ -150,16 +168,14 @@ class _ScanPageState extends State<ScanPage> {
         _lastDuplicateBannerTime[code] = now;
         _showBanner('Kód přidán: "$code"', Colors.green);
 
-        // Vibrace a zvuk
+        // Vibrace
         if (await Vibration.hasVibrator()) {
           Vibration.vibrate(duration: 100);
         }
+        // Zvuk
         if (_soundEnabled) {
-          _audioPlayer.open(
-            Audio("assets/success.wav"),
-            autoStart: true,
-            showNotification: false,
-          );
+          _audioPlayer.seek(Duration.zero);
+          _audioPlayer.play();
         }
 
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
@@ -234,7 +250,7 @@ class _ScanPageState extends State<ScanPage> {
                     onDetect: _onDetect,
                   ),
                 ),
-                // Scanned items list (made a bit bigger with flex 2)
+                // Scanned items list
                 Expanded(
                   flex: 2,
                   child: Column(
@@ -271,7 +287,6 @@ class _ScanPageState extends State<ScanPage> {
                                 ),
                                 title: Text(item),
                                 trailing: isInitial
-                                // no delete for initial items
                                     ? const SizedBox(width: 48)
                                     : IconButton(
                                   icon: const Icon(Icons.delete),
