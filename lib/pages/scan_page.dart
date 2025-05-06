@@ -35,7 +35,7 @@ class _ScanPageState extends State<ScanPage> {
   final MobileScannerController controller = MobileScannerController(
     formats: [BarcodeFormat.code128],
     detectionSpeed: DetectionSpeed.normal,
-    torchEnabled: true,
+    torchEnabled: false, // LED default is off now
   );
 
   // Regex: either a four-digit year 20xx or '201x', then '/', then three digits
@@ -81,7 +81,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   Future<void> _initAudio() async {
-    // Configure the audio session for speech/dialogue short sounds
+    // Configure the audio session for short speech/dialogue sounds
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
 
@@ -126,7 +126,7 @@ class _ScanPageState extends State<ScanPage> {
           TextButton(
             onPressed: () => messenger.hideCurrentMaterialBanner(),
             child: const Text(
-              'Zavřít',
+              'Close',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -166,13 +166,13 @@ class _ScanPageState extends State<ScanPage> {
         // New valid code: add, prevent immediate duplicate alert, show banner, scroll
         setState(() => scannedItems.add(code));
         _lastDuplicateBannerTime[code] = now;
-        _showBanner('Kód přidán: "$code"', Colors.green);
+        _showBanner('Code added: "$code"', Colors.green);
 
-        // Vibrace
+        // Vibrate
         if (await Vibration.hasVibrator()) {
           Vibration.vibrate(duration: 100);
         }
-        // Zvuk
+        // Play sound
         if (_soundEnabled) {
           _audioPlayer.seek(Duration.zero);
           _audioPlayer.play();
@@ -184,7 +184,7 @@ class _ScanPageState extends State<ScanPage> {
         final lastDup = _lastDuplicateBannerTime[code];
         if (lastDup == null || now.difference(lastDup) >= const Duration(seconds: 5)) {
           _lastDuplicateBannerTime[code] = now;
-          _showBanner('Kód již existuje: "$code"', Colors.orange);
+          _showBanner('Code already exists: "$code"', Colors.orange);
         }
       }
     } else {
@@ -192,7 +192,7 @@ class _ScanPageState extends State<ScanPage> {
       final lastInv = _lastInvalidBannerTime[code];
       if (lastInv == null || now.difference(lastInv) >= const Duration(seconds: 5)) {
         _lastInvalidBannerTime[code] = now;
-        _showBanner('Neplatný kód: "$code"', Colors.redAccent);
+        _showBanner('Invalid code: "$code"', Colors.redAccent);
       }
     }
 
@@ -216,7 +216,7 @@ class _ScanPageState extends State<ScanPage> {
       canPop: false,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Režim skenování"),
+          title: const Text("Scan Mode"),
           automaticallyImplyLeading: false,
           actions: [
             IconButton(
@@ -258,7 +258,7 @@ class _ScanPageState extends State<ScanPage> {
                       const Padding(
                         padding: EdgeInsets.all(8.0),
                         child: Text(
-                          "Naskenované položky:",
+                          "Scanned Items:",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -326,7 +326,7 @@ class _ScanPageState extends State<ScanPage> {
               ),
               onPressed: _endAndSave,
               icon: const Icon(Icons.check),
-              label: const Text("Ukončit a uložit"),
+              label: const Text("Finish and Save"),
             ),
           ),
         ),
