@@ -35,7 +35,7 @@ class _ScanPageState extends State<ScanPage> {
   final MobileScannerController controller = MobileScannerController(
     formats: [BarcodeFormat.code128],
     detectionSpeed: DetectionSpeed.normal,
-    torchEnabled: false, // LED default is off now
+    torchEnabled: true,
   );
 
   // Regex: either a four-digit year 20xx or '201x', then '/', then three digits
